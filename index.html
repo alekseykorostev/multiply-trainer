@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <title>Тренажёр умножения</title>
+  <style>
+    body { font-family: Arial; background:#f5f7fb; margin:0; padding:20px; }
+    .card { max-width: 460px; margin: auto; padding: 20px; border-radius: 20px; background:white; box-shadow: 0 6px 20px rgba(0,0,0,0.08); }
+    h2 { margin-bottom: 15px; }
+
+    .settings { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:10px; }
+    .settings div { display:flex; flex-direction:column; font-size:14px; color:#555; }
+
+    input, button {
+      font-size: 18px;
+      padding: 10px;
+      border-radius: 10px;
+      border:1px solid #ddd;
+    }
+
+    input:focus { outline:none; border-color:#4a90e2; }
+
+    button {
+      background:#4a90e2;
+      color:white;
+      border:none;
+      cursor:pointer;
+    }
+
+    button:hover { opacity:0.9; }
+
+    .question { font-size: 36px; margin: 20px 0; }
+    .timer { font-size: 16px; color: gray; }
+    .result { font-size: 20px; margin-top: 20px; }
+    .feedback { font-size: 22px; margin-top: 10px; height: 30px; }
+    .correct { color: green; }
+    .wrong { color: red; }
+    .progress { margin-top: 10px; font-size: 16px; color: #777; }
+
+    #answer {
+      width:120px;
+      text-align:center;
+      font-size:24px;
+    }
+  </style>
+</head>
+<body>
+
+<div class="card">
+  <h2>Тренажёр умножения</h2>
+
+  <div class="settings">
+    <div>
+      Числа от
+      <input type="number" id="min" value="2" min="0" max="10">
+    </div>
+    <div>
+      до
+      <input type="number" id="max" value="5" min="0" max="10">
+    </div>
+
+    <div>
+      Умножение от
+      <input type="number" id="minMul" value="0" min="0" max="10">
+    </div>
+    <div>
+      до
+      <input type="number" id="maxMul" value="10" min="0" max="10">
+    </div>
+
+    <div style="grid-column: span 2;">
+      Время (сек)
+      <input type="number" id="timeLimit" value="5" min="1" max="20">
+    </div>
+  </div>
+
+  <button onclick="start()">Старт</button>
+
+  <div class="progress" id="progress"></div>
+  <div class="question" id="question"></div>
+
+  <input id="answer" type="tel" inputmode="numeric" pattern="[0-9]*" style="display:none">
+
+  <div class="timer" id="timer"></div>
+  <div class="feedback" id="feedback"></div>
+
+  <button id="nextBtn" style="display:none" onclick="goNext()">Дальше</button>
+
+  <div class="result" id="result"></div>
+</div>
+
+<script>
+let tasks = [];
+let current = 0;
+let correct = 0;
+let errors = 0;
+let timer;
+let timeLeft;
+let waitingNext = false;
+let autoNextTimeout;
+
+function shuffle(array) {
+  for (let i = array.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [array[i], array[j]] = [array[j], array[i]];
+  }
+}
+
+function generateTasks(min, max, minMul, maxMul) {
+  const arr = [];
+  for (let i = min; i <= max; i++) {
+    for (let j = minMul; j <= maxMul; j++) {
+      arr.push({ a: i, b: j, answer: i * j });
+    }
+  }
+  shuffle(arr);
+  return arr;
+}
+
+function start() {
+  const min = parseInt(document.getElementById('min').value);
+  const max = parseInt(document.getElementById('max').value);
+  const minMul = parseInt(document.getElementById('minMul').value);
+  const maxMul = parseInt(document.getElementById('maxMul').value);
+
+  tasks = generateTasks(min, max, minMul, maxMul);
+  current = 0;
+  correct = 0;
+  errors = 0;
+
+  document.getElementById('result').innerText = '';
+  document.getElementById('answer').style.display = 'inline-block';
+
+  nextQuestion();
+}
+
+function nextQuestion() {
+  clearTimeout(autoNextTimeout);
+
+  if (current >= tasks.length) {
+    finish();
+    return;
+  }
+
+  waitingNext = false;
+  document.getElementById('feedback').innerText = '';
+
+  const task = tasks[current];
+  document.getElementById('question').innerText = `${task.a} × ${task.b}`;
+  document.getElementById('progress').innerText = `${current + 1} / ${tasks.length}`;
+
+  const input = document.getElementById('answer');
+  input.value = '';
+  input.focus();
+
+  timeLeft = parseInt(document.getElementById('timeLimit').value);
+  updateTimer();
+
+  clearInterval(timer);
+  timer = setInterval(() => {
+    if (waitingNext) return;
+
+    timeLeft--;
+    updateTimer();
+
+    if (timeLeft <= 0) {
+      showResult(null);
+    }
+  }, 1000);
+}
+
+function updateTimer() {
+  document.getElementById('timer').innerText = `Осталось: ${timeLeft} сек`;
+}
+
+function showResult(value) {
+  clearInterval(timer);
+  waitingNext = true;
+
+  const task = tasks[current];
+  const feedback = document.getElementById('feedback');
+
+  if (value === task.answer) {
+    correct++;
+    feedback.innerText = '✔ Правильно';
+    feedback.className = 'feedback correct';
+
+    autoNextTimeout = setTimeout(() => {
+      goNext();
+    }, 1000);
+  } else {
+    errors++;
+    tasks.push(task);
+    feedback.innerText = `✖ Неправильно. Ответ: ${task.answer}`;
+    feedback.className = 'feedback wrong';
+  }
+}
+
+function goNext() {
+  current++;
+  nextQuestion();
+}
+
+
+document.getElementById('answer').addEventListener('keydown', function(e) {
+  if (e.key === 'Enter') {
+    if (waitingNext) {
+      goNext();
+    } else {
+      const value = parseInt(this.value);
+      showResult(value);
+    }
+  }
+});
+
+function finish() {
+  clearInterval(timer);
+  document.getElementById('question').innerText = 'Готово!';
+  document.getElementById('timer').innerText = '';
+  document.getElementById('answer').style.display = 'none';
+
+  document.getElementById('result').innerText =
+    `Правильно: ${correct} | Ошибки: ${errors}`;
+}
+</script>
+
+</body>
+</html>
