@@ -3,226 +3,236 @@
 <head>
   <meta charset="UTF-8">
   <title>Тренажёр умножения</title>
+
+  <!-- favicon -->
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='0.9em' font-size='90'%3E%F0%9F%A7%AE%3C/text%3E%3C/svg%3E">
+
   <style>
     body { font-family: Arial; background:#f5f7fb; margin:0; padding:20px; }
-    .card { max-width: 460px; margin: auto; padding: 20px; border-radius: 20px; background:white; box-shadow: 0 6px 20px rgba(0,0,0,0.08); }
-    h2 { margin-bottom: 15px; }
+    .card { max-width: 520px; margin:auto; padding:20px; border-radius:20px; background:white; box-shadow:0 6px 20px rgba(0,0,0,0.08); }
 
-    .settings { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:10px; }
+    .settings { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
     .settings div { display:flex; flex-direction:column; font-size:14px; color:#555; }
 
-    input, button {
-      font-size: 18px;
-      padding: 10px;
-      border-radius: 10px;
-      border:1px solid #ddd;
-    }
-
-    input:focus { outline:none; border-color:#4a90e2; }
+    input, button { font-size:18px; padding:10px; border-radius:10px; border:1px solid #ddd; }
 
     button {
       background:#4a90e2;
       color:white;
       border:none;
       cursor:pointer;
+      margin-top:14px;
     }
 
-    button:hover { opacity:0.9; }
+    .question { font-size:36px; margin:20px 0; }
+    .feedback { font-size:22px; height:30px; }
+    .correct { color:green; }
+    .wrong { color:red; }
+    .progress { margin-top:10px; color:#777; }
 
-    .question { font-size: 36px; margin: 20px 0; }
-    .timer { font-size: 16px; color: gray; }
-    .result { font-size: 20px; margin-top: 20px; }
-    .feedback { font-size: 22px; margin-top: 10px; height: 30px; }
-    .correct { color: green; }
-    .wrong { color: red; }
-    .progress { margin-top: 10px; font-size: 16px; color: #777; }
+    #answer { width:120px; text-align:center; font-size:26px; }
 
-    #answer {
-      width:120px;
-      text-align:center;
-      font-size:24px;
-    }
+    .history { margin-top:20px; }
+    .history table { width:100%; border-collapse:collapse; font-size:12px; }
+    .history th,.history td { border:1px solid #ddd; padding:4px; text-align:center; }
+    .toggle { cursor:pointer; color:#4a90e2; margin-top:10px; display:inline-block; }
+
+    .sound-box { margin-top:10px; font-size:14px; color:#555; }
   </style>
 </head>
 <body>
 
 <div class="card">
-  <h2>Тренажёр умножения</h2>
+  <h2>🧮 Тренажёр умножения</h2>
 
   <div class="settings">
-    <div>
-      Числа от
-      <input type="number" id="min" value="2" min="0" max="10">
-    </div>
-    <div>
-      до
-      <input type="number" id="max" value="5" min="0" max="10">
-    </div>
-
-    <div>
-      Умножение от
-      <input type="number" id="minMul" value="0" min="0" max="10">
-    </div>
-    <div>
-      до
-      <input type="number" id="maxMul" value="10" min="0" max="10">
-    </div>
-
-    <div style="grid-column: span 2;">
-      Время (сек)
-      <input type="number" id="timeLimit" value="5" min="1" max="20">
-    </div>
+    <div>Числа от<input id="min" type="number" value="2"></div>
+    <div>до<input id="max" type="number" value="5"></div>
+    <div>Умножение от<input id="minMul" type="number" value="0"></div>
+    <div>до<input id="maxMul" type="number" value="10"></div>
+    <div style="grid-column:span 2;">Время (сек)<input id="timeLimit" type="number" value="5"></div>
   </div>
 
-  <button onclick="start()">Старт</button>
+  <div class="sound-box">
+    <label><input type="checkbox" id="soundToggle" checked> 🔊 Звук</label>
+  </div>
+
+  <button id="startBtn">Старт</button>
 
   <div class="progress" id="progress"></div>
   <div class="question" id="question"></div>
 
-  <input id="answer" type="tel" inputmode="numeric" pattern="[0-9]*" style="display:none">
+  <input id="answer" type="text" inputmode="numeric" pattern="[0-9]*" style="display:none">
 
-  <div class="timer" id="timer"></div>
+  <div class="progress" id="timer"></div>
   <div class="feedback" id="feedback"></div>
 
-  <button id="nextBtn" style="display:none" onclick="goNext()">Дальше</button>
+  <div id="result"></div>
 
-  <div class="result" id="result"></div>
+  <div class="history">
+    <div class="toggle" id="toggleHistory">📊 Показать статистику</div>
+    <div id="historyTable" style="display:none"></div>
+  </div>
 </div>
 
 <script>
-let tasks = [];
-let current = 0;
-let correct = 0;
-let errors = 0;
-let timer;
-let timeLeft;
-let waitingNext = false;
-let autoNextTimeout;
+const minEl=document.getElementById('min');
+const maxEl=document.getElementById('max');
+const minMulEl=document.getElementById('minMul');
+const maxMulEl=document.getElementById('maxMul');
+const timeLimitEl=document.getElementById('timeLimit');
+const soundToggle=document.getElementById('soundToggle');
 
-function shuffle(array) {
-  for (let i = array.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [array[i], array[j]] = [array[j], array[i]];
+const answer=document.getElementById('answer');
+const question=document.getElementById('question');
+const progress=document.getElementById('progress');
+const timerEl=document.getElementById('timer');
+const feedback=document.getElementById('feedback');
+const result=document.getElementById('result');
+const historyTable=document.getElementById('historyTable');
+const startBtn=document.getElementById('startBtn');
+const toggleHistory=document.getElementById('toggleHistory');
+
+let tasks=[],current=0,correct=0,errors=0;
+let timer=null,timeLeft=0,waitingNext=false,startTime;
+let locked=false;
+
+function sound(type){
+  if(!soundToggle.checked) return;
+  const ctx=new (window.AudioContext||window.webkitAudioContext)();
+  const o=ctx.createOscillator();
+  const g=ctx.createGain();
+  o.connect(g);g.connect(ctx.destination);
+
+  if(type==='ok'){
+    o.frequency.value=1000;
+  } else {
+    o.frequency.value=140;
   }
+
+  o.type='sine';
+  g.gain.value=0.2;
+
+  o.start();
+  g.gain.exponentialRampToValueAtTime(0.0001,ctx.currentTime+0.18);
+  o.stop(ctx.currentTime+0.18);
 }
 
-function generateTasks(min, max, minMul, maxMul) {
-  const arr = [];
-  for (let i = min; i <= max; i++) {
-    for (let j = minMul; j <= maxMul; j++) {
-      arr.push({ a: i, b: j, answer: i * j });
-    }
-  }
+function shuffle(a){for(let i=a.length-1;i>0;i--){let j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}}
+
+function generateTasks(min,max,minMul,maxMul){
+  let arr=[];
+  for(let i=min;i<=max;i++) for(let j=minMul;j<=maxMul;j++) arr.push({a:i,b:j,answer:i*j});
   shuffle(arr);
   return arr;
 }
 
-function start() {
-  const min = parseInt(document.getElementById('min').value);
-  const max = parseInt(document.getElementById('max').value);
-  const minMul = parseInt(document.getElementById('minMul').value);
-  const maxMul = parseInt(document.getElementById('maxMul').value);
-
-  tasks = generateTasks(min, max, minMul, maxMul);
-  current = 0;
-  correct = 0;
-  errors = 0;
-
-  document.getElementById('result').innerText = '';
-  document.getElementById('answer').style.display = 'inline-block';
-
+function start(){
+  tasks=generateTasks(+minEl.value,+maxEl.value,+minMulEl.value,+maxMulEl.value);
+  current=0;correct=0;errors=0;
+  startTime=Date.now();
+  result.innerText='';
+  answer.style.display='inline-block';
   nextQuestion();
 }
 
-function nextQuestion() {
-  clearTimeout(autoNextTimeout);
+function nextQuestion(){
+  clearInterval(timer);
+  locked=false;
+  if(current>=tasks.length) return finish();
 
-  if (current >= tasks.length) {
-    finish();
-    return;
-  }
+  waitingNext=false;
+  feedback.innerText='';
 
-  waitingNext = false;
-  document.getElementById('feedback').innerText = '';
+  const t=tasks[current];
+  question.innerText=`${t.a} × ${t.b}`;
+  progress.innerText=`${current+1}/${tasks.length}`;
 
-  const task = tasks[current];
-  document.getElementById('question').innerText = `${task.a} × ${task.b}`;
-  document.getElementById('progress').innerText = `${current + 1} / ${tasks.length}`;
+  answer.value='';
+  answer.focus();
 
-  const input = document.getElementById('answer');
-  input.value = '';
-  input.focus();
-
-  timeLeft = parseInt(document.getElementById('timeLimit').value);
+  timeLeft=+timeLimitEl.value;
   updateTimer();
 
-  clearInterval(timer);
-  timer = setInterval(() => {
-    if (waitingNext) return;
+  timer=setInterval(()=>{
+    if(locked) return;
 
     timeLeft--;
     updateTimer();
 
-    if (timeLeft <= 0) {
-      showResult(null);
+    if(timeLeft<=0){
+      locked=true;
+      const val=answer.value.trim()===''?null:+answer.value;
+      showResult(val);
     }
-  }, 1000);
+  },1000);
 }
 
-function updateTimer() {
-  document.getElementById('timer').innerText = `Осталось: ${timeLeft} сек`;
-}
+function updateTimer(){timerEl.innerText=`⏱ ${timeLeft} сек`;}
 
-function showResult(value) {
+function showResult(val){
+  if(waitingNext) return;
   clearInterval(timer);
-  waitingNext = true;
+  waitingNext=true;
 
-  const task = tasks[current];
-  const feedback = document.getElementById('feedback');
+  const t=tasks[current];
 
-  if (value === task.answer) {
+  if(val===t.answer){
     correct++;
-    feedback.innerText = '✔ Правильно';
-    feedback.className = 'feedback correct';
-
-    autoNextTimeout = setTimeout(() => {
-      goNext();
-    }, 1000);
+    feedback.className='feedback correct';
+    feedback.innerText='✔ правильно';
+    sound('ok');
+    setTimeout(goNext,1000);
   } else {
     errors++;
-    tasks.push(task);
-    feedback.innerText = `✖ Неправильно. Ответ: ${task.answer}`;
-    feedback.className = 'feedback wrong';
+    tasks.push(t);
+    feedback.className='feedback wrong';
+    feedback.innerText=`✖ ${t.answer}`;
+    sound('bad');
   }
 }
 
-function goNext() {
-  current++;
-  nextQuestion();
-}
+function goNext(){current++;nextQuestion();}
 
+answer.addEventListener('input',()=>answer.value=answer.value.replace(/[^0-9]/g,''));
 
-document.getElementById('answer').addEventListener('keydown', function(e) {
-  if (e.key === 'Enter') {
-    if (waitingNext) {
-      goNext();
-    } else {
-      const value = parseInt(this.value);
-      showResult(value);
-    }
+answer.addEventListener('keydown',e=>{
+  if(e.key==='Enter'){
+    if(waitingNext) goNext();
+    else showResult(+answer.value);
   }
 });
 
-function finish() {
+startBtn.onclick=start;
+toggleHistory.onclick=()=>{
+  historyTable.style.display=historyTable.style.display==='none'?'block':'none';
+};
+
+function finish(){
   clearInterval(timer);
-  document.getElementById('question').innerText = 'Готово!';
-  document.getElementById('timer').innerText = '';
-  document.getElementById('answer').style.display = 'none';
+  const total=Math.round((Date.now()-startTime)/1000);
 
-  document.getElementById('result').innerText =
-    `Правильно: ${correct} | Ошибки: ${errors}`;
+  question.innerText='Готово!';
+  answer.style.display='none';
+  timerEl.innerText='';
+
+  result.innerText=`✔ ${correct} | ✖ ${errors} | ⏱ ${total}s`;
+
+  saveHistory({date:new Date().toLocaleString(),correct,errors,time:total,settings:`${minEl.value}-${maxEl.value} × ${minMulEl.value}-${maxMulEl.value}`});
+  renderHistory();
 }
-</script>
 
+function saveHistory(e){let d=JSON.parse(localStorage.getItem('mathTrainerHistory')||'[]');d.unshift(e);localStorage.setItem('mathTrainerHistory',JSON.stringify(d));}
+
+function renderHistory(){
+  let d=JSON.parse(localStorage.getItem('mathTrainerHistory')||'[]');
+  let html='<table><tr><th>Дата</th><th>Настройки</th><th>✔</th><th>✖</th><th>⏱</th></tr>';
+  d.forEach(x=>html+=`<tr><td>${x.date}</td><td>${x.settings}</td><td>${x.correct}</td><td>${x.errors}</td><td>${x.time}</td></tr>`);
+  html+='</table>';
+  historyTable.innerHTML=html;
+}
+
+renderHistory();
+</script>
 </body>
 </html>
